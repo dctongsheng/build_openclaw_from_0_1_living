@@ -180,6 +180,53 @@ openclaw config get tools.profile  # 应该显示 "full"
 
 详细排查方法：[故障排查指南 - 工具权限问题](./stages/stage8-topics/31-troubleshooting.md#工具权限问题)
 
+### Q: Agent 无法执行命令（curl、git 等）怎么办？
+
+**A**: 这是**第二常见的配置问题**！
+
+**症状**：
+- Agent 返回 "I don't have access to exec tool"
+- 无法执行 shell 命令
+- 命令执行功能被拒绝
+
+**原因**：
+即使 `tools.profile` 设置为 "full"，OpenClaw 默认不启用"提升工具"（elevated tools），包括 exec、process、runtime 等。
+
+**快速解决**：
+```bash
+# 1. 检查 elevated 状态
+openclaw config get tools.elevated
+# 如果显示 "Config path not found"，说明未启用
+
+# 2. 编辑配置文件
+nano ~/.openclaw/openclaw.json
+
+# 3. 在 tools 部分添加：
+{
+  "tools": {
+    "profile": "full",
+    "elevated": {
+      "enabled": true
+    }
+  }
+}
+
+# 4. 重启 Gateway
+openclaw gateway restart
+
+# 5. 验证修复
+openclaw status | grep runtime
+# 应该看到: runtime=[exec, process]
+```
+
+**⚠️ 安全警告**：
+启用 elevated tools 后，务必：
+- 将群组策略改为 `allowlist`
+- 避免在开放群组中使用
+- 定期运行安全审计
+
+详细配置指南：[最佳实践文档](./stages/stage8-topics/32-best-practices.md)
+
 ### Q: 支持哪些AI模型？
 
 **A**:

@@ -162,6 +162,153 @@ openclaw agents list
 
 ---
 
+### 🔴 问题：exec/curl 等命令执行工具无法使用
+
+**症状**：
+- Agent 返回 "I don't have access to exec tool"
+- 无法执行 shell 命令（curl, ls, grep 等）
+- 命令执行功能被拒绝
+
+**原因分析**：
+
+即使 `tools.profile` 设置为 "full"，OpenClaw 默认不会启用"提升工具"（elevated tools）。这些工具包括：
+- `exec` - 执行 shell 命令
+- `process` - 进程管理
+- `runtime` - 运行时控制
+
+这是为了安全考虑，因为这些工具具有系统级访问权限。
+
+**诊断步骤**：
+
+```bash
+# 1. 检查当前工具配置
+openclaw config get tools.profile
+# 应该显示 "full"
+
+# 2. 检查 elevated tools 是否启用
+openclaw config get tools.elevated
+# 如果显示 "Config path not found"，说明未启用
+
+# 3. 查看完整的安全审计
+openclaw status
+# 查看 Security audit 部分，确认 runtime 工具状态
+```
+
+**解决方案**：
+
+#### 方案一：启用 Elevated Tools（推荐）
+
+```bash
+# 1. 编辑配置文件
+nano ~/.openclaw/openclaw.json
+
+# 2. 在 tools 部分添加 elevated 配置
+{
+  "tools": {
+    "profile": "full",
+    "elevated": {
+      "enabled": true
+    }
+  }
+}
+
+# 3. 保存并重启 Gateway
+openclaw gateway restart
+
+# 4. 验证修复
+openclaw status | grep runtime
+# 应该看到: runtime=[exec, process]
+```
+
+#### 方案二：使用命令行配置
+
+```bash
+# 创建 elevated 配置
+cat > /tmp/elevated-config.json << 'EOF'
+{
+  "tools": {
+    "profile": "full",
+    "elevated": {
+      "enabled": true
+    }
+  }
+}
+EOF
+
+# 合并到主配置
+jq -s '.[0] * .[1]' ~/.openclaw/openclaw.json /tmp/elevated-config.json > ~/.openclaw/openclaw.json.tmp
+mv ~/.openclaw/openclaw.json.tmp ~/.openclaw/openclaw.json
+
+# 重启 Gateway
+openclaw gateway restart
+```
+
+**验证修复**：
+
+```bash
+# 1. 检查 elevated 状态
+openclaw config get tools.elevated.enabled
+# 应该显示: true
+
+# 2. 查看安全审计报告
+openclaw status | grep -A 5 "runtime"
+# 应该看到: runtime=[exec, process]
+
+# 3. 测试命令执行
+# 在 OpenClaw 对话中尝试执行简单命令
+```
+
+**⚠️ 安全警告**：
+
+启用 elevated tools 后，安全审计会显示警告：
+
+```
+CRITICAL Open groupPolicy with runtime/filesystem tools exposed
+```
+
+**安全建议**：
+
+1. **限制群组访问**：
+   ```bash
+   # 将飞书群组改为 allowlist
+   openclaw config set channels.feishu.groupPolicy "allowlist"
+   openclaw config set channels.feishu.groupAllowFrom '["trusted_group_id"]'
+   ```
+
+2. **启用沙箱**（如果可能）：
+   ```bash
+   openclaw config set agents.defaults.sandbox.mode "all"
+   ```
+
+3. **限制文件系统访问**：
+   ```bash
+   openclaw config set tools.fs.workspaceOnly true
+   ```
+
+4. **使用白名单**：
+   - 只在受信任的私聊中启用这些工具
+   - 避免在开放群组中使用 elevated tools
+
+**不同配置的安全级别对比**：
+
+| 配置 | 工具权限 | 安全级别 | 适用场景 |
+|------|---------|---------|----------|
+| `messaging` + no elevated | 仅消息工具 | ⭐⭐⭐⭐⭐ | 纯聊天机器人 |
+| `full` + no elevated | 基础工具（无命令执行） | ⭐⭐⭐⭐ | 一般助手 |
+| `full` + elevated + private | 所有工具（私聊） | ⭐⭐⭐ | 个人助手 |
+| `full` + elevated + open groups | 所有工具（开放群组） | ⭐ | 极高风险，不推荐 |
+
+**最佳实践**：
+
+1. ✅ **默认使用最小权限**：从 `messaging` 开始，按需提升
+2. ✅ **私聊启用 elevated**：只在个人聊天中启用命令执行
+3. ✅ **群组使用 allowlist**：严格控制哪些群组可以使用高级工具
+4. ✅ **定期安全审计**：每周运行 `openclaw security audit`
+5. ✅ **监控日志**：关注异常的命令执行行为
+6. ❌ **避免开放群组 + elevated**：这是最危险的组合
+
+---
+
 ## 连接问题
 
 ### Gateway 无法连接
