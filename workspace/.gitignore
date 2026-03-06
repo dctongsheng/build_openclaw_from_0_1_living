@@ -1,0 +1,28 @@
+# OpenClaw Workspace - 忽略敏感配置
+
+# 敏感配置文件
+*.secret.*
+secrets.*
+config/credentials.json
+config/.env
+
+# Agent私有配置
+.agents/*/private/
+.agents/*/secrets.*
+
+# 通道敏感配置
+.channels/*/token
+.channels/*/credentials
+
+# 缓存和临时文件
+.cache/
+.tmp/
+*.tmp
+
+# 会话数据
+sessions/
+conversations/
+
+# 日志
+*.log
+logs/

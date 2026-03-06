@@ -1,0 +1,40 @@
+# OpenClaw 敏感配置
+openclaw.json
+*.key
+*.secret
+*.env
+
+# OpenClaw Workspace (可选，根据需要调整)
+# workspace/
+# workspace/*/config/*.json
+# workspace/*/.agent/
+# workspace/*/secrets.*
+
+# 但保留示例配置
+!workspace.example/
+!.gitkeep
+
+# OpenClaw 数据目录
+.data/
+.db/
+
+# 日志文件
+*.log
+logs/
+
+# 临时文件
+*.tmp
+.DS_Store
+Thumbs.db
+
+# 编辑器
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Node.js (如果将来要建网站)
+node_modules/
+dist/
+build/
