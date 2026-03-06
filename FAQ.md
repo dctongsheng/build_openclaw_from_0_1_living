@@ -146,6 +146,40 @@ openclaw start
 
 详细说明：[快速开始](./stages/stage1-stage2/03-quick-start.md)
 
+### Q: Agent无法使用工具怎么办？（如文件操作、命令执行等）
+
+**A**: 这是**最常见的配置问题**之一！
+
+**症状**：
+- Agent 返回 "I don't have access to that tool"
+- Agent 拒绝执行文件操作、命令执行等
+- 工具调用失败或被拒绝
+
+**原因**：
+通常是 `tools.profile` 配置为 "messaging" 模式，该模式限制了大部分工具的访问权限。
+
+**快速解决**：
+```bash
+# 1. 检查当前配置
+openclaw config get tools.profile
+
+# 2. 如果显示 "messaging"，修改为 "full"
+openclaw config set tools.profile full
+
+# 3. 重启 Gateway
+openclaw gateway restart
+
+# 4. 验证修复
+openclaw config get tools.profile  # 应该显示 "full"
+```
+
+**不同工具模式对比**：
+- `messaging` - 仅消息相关工具（最受限）
+- `coding` - 编程相关工具
+- `full` - 所有工具（推荐）
+
+详细排查方法：[故障排查指南 - 工具权限问题](./stages/stage8-topics/31-troubleshooting.md#工具权限问题)
+
 ### Q: 支持哪些AI模型？
 
 **A**:

@@ -408,6 +408,21 @@ export OPENCLAW_CONFIG_PATH="/path/to/custom/openclaw.json"
 
 ## Tools 配置
 
+> ⚠️ **重要提示**：工具配置是 OpenClaw 中最容易出问题的地方之一。如果发现 Agent 无法使用工具（如文件操作、命令执行等），通常是 `tools.profile` 配置不正确。
+>
+> **快速诊断**：
+> ```bash
+> # 检查当前工具配置
+> openclaw config get tools.profile
+>
+> # 如果显示 "messaging"，说明工具权限受限
+> # 解决方法：设置为 full 模式
+> openclaw config set tools.profile full
+> openclaw gateway restart
+> ```
+>
+> 详细问题排查请参考：[故障排查指南](../stage8-topics/31-troubleshooting.md#工具权限问题)
+
 ### 工具配置文件 (Profiles)
 
 OpenClaw 提供了预定义的工具配置文件：
