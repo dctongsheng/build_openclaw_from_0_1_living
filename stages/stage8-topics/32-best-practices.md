@@ -104,6 +104,61 @@ OpenClaw 的工具权限有三个层次：
 - **群组**：始终使用 `allowlist`
 - **从未设置**：`allowlist` + 添加受信任的群组
 
+#### 4️⃣ 群组级配置（最细粒度，常被忽略！）
+
+```json
+{
+  "channels": {
+    "telegram": {
+      "groupPolicy": "allowlist",
+      "groupAllowFrom": ["-5002529238", "-5092528016"],
+      "groups": {
+        "-5002529238": {
+          "groupPolicy": "open",
+          "requireMention": false,
+          "enabled": true,
+          "groupMentionTrigger": "@ai"
+        },
+        "-5092528016": {
+          "groupPolicy": "open",
+          "requireMention": true
+        }
+      }
+    }
+  }
+}
+```
+
+**⚠️ 重要提示**：
+
+即使设置了全局的 `groupPolicy` 和 `groupAllowFrom`，**也必须为每个群组 ID 配置 `groups` 对象**！
+
+这是最容易遗漏的配置步骤。如果只设置全局白名单而不配置 `groups` 对象，群组消息仍然不会被处理。
+
+**配置参数说明**：
+
+- `groupPolicy`：该群组的访问策略（可覆盖全局设置）
+  - `"open"` - 开放访问
+  - `"allowlist"` - 白名单模式
+  - `"deny"` - 禁用
+
+- `requireMention`：是否需要 @bot 才能触发
+  - `false` - 任何消息都会被处理（适合专用 AI 群组）
+  - `true` - 只有 @bot 的消息才会被处理（适合混合聊天群组）
+
+- `enabled`：是否启用该群组
+  - `true` - 启用
+  - `false` - 禁用（bot 不会处理该群组的任何消息）
+
+- `groupMentionTrigger`：自定义提及触发字符串（可选）
+  - 默认：`@bot_username`
+  - 可设置为：`"@ai"`、`"@助手"` 等
+
+**推荐配置**：
+- **专用 AI 群组**：`requireMention: false`
+- **混合聊天群组**：`requireMention: true`
+- **临时禁用**：`enabled: false`
+
 ### 推荐配置组合
 
 #### 场景 1：个人聊天助手（最安全）
@@ -145,8 +200,19 @@ OpenClaw 的工具权限有三个层次：
     "telegram": {
       "dmPolicy": "pairing",
       "groupPolicy": "allowlist",
-      "groupAllowFrom": ["team_group_id"],
-      "groupMentionTrigger": "@ai"
+      "groupAllowFrom": ["-5002529238", "-5092528016"],
+      "groups": {
+        "-5002529238": {
+          "groupPolicy": "open",
+          "requireMention": true,
+          "groupMentionTrigger": "@ai"
+        },
+        "-5092528016": {
+          "groupPolicy": "open",
+          "requireMention": true,
+          "groupMentionTrigger": "@ai"
+        }
+      }
     }
   }
 }
@@ -157,6 +223,7 @@ OpenClaw 的工具权限有三个层次：
 - ✅ 无命令执行能力
 - ✅ 白名单群组
 - ✅ 需要 @ai 提及
+- ✅ 包含完整的 `groups` 配置
 
 #### 场景 3：开发环境助手（完全开放）
 
@@ -172,13 +239,25 @@ OpenClaw 的工具权限有三个层次：
     "telegram": {
       "dmPolicy": "open",
       "groupPolicy": "allowlist",
-      "groupAllowFrom": ["dev_team_group"]
-    },
-    "agents": {
-      "defaults": {
-        "sandbox": {
-          "mode": "none"
+      "groupAllowFrom": ["-5082337987", "-5146706488"],
+      "groups": {
+        "-5082337987": {
+          "groupPolicy": "open",
+          "requireMention": false,
+          "enabled": true
+        },
+        "-5146706488": {
+          "groupPolicy": "open",
+          "requireMention": false,
+          "enabled": true
         }
+      }
+    }
+  },
+  "agents": {
+    "defaults": {
+      "sandbox": {
+        "mode": "none"
       }
     }
   }
@@ -190,6 +269,8 @@ OpenClaw 的工具权限有三个层次：
 - ⚠️ 需要沙箱配置
 - ⚠️ 仅限开发环境
 - ❌ 不推荐用于生产环境
+- ✅ 包含完整的 `groups` 配置
+- ⚠️ `requireMention: false` - 任何消息都会被处理
 
 ---
 
@@ -442,9 +523,22 @@ openclaw security audit
 - [ ] 检查 `tools.profile` 是否符合需求
 - [ ] 如需 elevated tools，确认已启用
 - [ ] 所有群组都使用 allowlist
+- [ ] **为每个群组 ID 配置 `channels.telegram.groups` 对象**（重要！）
+- [ ] 验证群组配置：`openclaw config get channels.telegram.groups`
 - [ ] Gateway 已配置认证
 - [ ] 文件权限正确（700）
 - [ ] 测试基本功能
+
+### 配置 Telegram 群组后
+
+- [ ] 检查 `channels.telegram.groupPolicy` 是否为 `allowlist`
+- [ ] 检查 `channels.telegram.groupAllowFrom` 是否包含所有群组 ID
+- [ ] **检查 `channels.telegram.groups` 是否为每个群组配置了**（最易遗漏！）
+- [ ] 为每个群组设置 `requireMention`（true 或 false）
+- [ ] 为每个群组设置 `groupPolicy`（通常为 "open"）
+- [ ] 重启 Gateway：`openclaw gateway restart`
+- [ ] 在群组中测试功能（发送消息，验证 bot 是否响应）
+- [ ] 检查日志：`tail -f ~/.openclaw/logs/gateway.log`
 
 ### 启用 elevated tools 后
 
@@ -488,6 +582,14 @@ openclaw gateway logs
 # 工具权限
 openclaw config get tools.profile
 openclaw config get tools.elevated
+
+# Telegram 群组配置
+openclaw config get channels.telegram.groupPolicy
+openclaw config get channels.telegram.groupAllowFrom
+openclaw config get channels.telegram.groups
+# 为群组配置
+openclaw config set channels.telegram.groups.'<群组ID>'.requireMention false
+openclaw config set channels.telegram.groups.'<群组ID>'.groupPolicy open
 ```
 
 ### 配置文件位置

@@ -530,6 +530,245 @@ tail -f ~/.openclaw/logs/gateway.log
 
 ---
 
+### 🔴 Telegram 群组配置了白名单但仍无响应
+
+**症状**：
+- ✅ Telegram 私聊工作正常
+- ✅ 已配置 `groupPolicy: "allowlist"`
+- ✅ 已配置 `groupAllowFrom: [...]`（包含正确的群组ID）
+- ❌ Telegram 群组中 @bot 仍然无任何反应
+
+**原因分析**：
+
+这是一个**更隐蔽的配置问题**！
+
+虽然你配置了全局的 `groupPolicy` 和 `groupAllowFrom`，但**缺少了 `channels.telegram.groups` 对象的配置**。
+
+根据 OpenClaw 的配置体系，群组访问控制有三个层次：
+
+1. **全局群组策略**（`channels.telegram.groupPolicy`）
+   - 控制默认的群组访问行为
+   - 可选值：`open`、`allowlist`、`deny`
+
+2. **全局白名单**（`channels.telegram.groupAllowFrom`）
+   - 当 `groupPolicy` 为 `allowlist` 时生效
+   - 列出允许的群组 ID
+
+3. **⭐ 每个群组的详细配置**（`channels.telegram.groups.<群组ID>`）**【容易被忽略】**
+   - 为每个群组单独配置行为
+   - 包括：`requireMention`、`groupPolicy`、`enabled` 等
+   - **即使设置了全局白名单，也必须配置此项！**
+
+**官方文档说明**：
+
+> Group replies require mention by default. Mention can come from native @botusername mention, or mention patterns in agents.list[].groupChat.mentionPatterns.
+
+如果不配置 `channels.telegram.groups`，系统无法确定：
+- 是否需要 @bot 才能触发
+- 该群组的策略是什么
+- 该群组是否启用
+
+**诊断步骤**：
+
+```bash
+# 1. 检查全局群组策略
+openclaw config get channels.telegram.groupPolicy
+# 应该显示: allowlist
+
+# 2. 检查全局白名单
+openclaw config get channels.telegram.groupAllowFrom
+# 应该显示: ["-5002529238", "-5092528016", ...]
+
+# 3. 检查群组详细配置（关键！）
+openclaw config get channels.telegram.groups
+# 如果显示 "Config path not found" 或 "{}"，说明没有配置！
+
+# 4. 查看会话文件获取群组 ID
+cat ~/.openclaw/agents/main/sessions/sessions.json | grep "telegram:group" | head -5
+# 应该看到类似：agent:main:telegram:group:-5002529238
+```
+
+**解决方案**：
+
+为每个群组 ID 添加详细配置：
+
+```bash
+# 为群组 -5002529238 配置
+openclaw config set channels.telegram.groups.'-5002529238'.groupPolicy open
+openclaw config set channels.telegram.groups.'-5002529238'.requireMention false
+
+# 为群组 -5092528016 配置
+openclaw config set channels.telegram.groups.'-5092528016'.groupPolicy open
+openclaw config set channels.telegram.groups.'-5092528016'.requireMention false
+
+# 为群组 -5082337987 配置
+openclaw config set channels.telegram.groups.'-5082337987'.groupPolicy open
+openclaw config set channels.telegram.groups.'-5082337987'.requireMention false
+
+# 为群组 -5146706488 配置
+openclaw config set channels.telegram.groups.'-5146706488'.groupPolicy open
+openclaw config set channels.telegram.groups.'-5146706488'.requireMention false
+
+# 重启 Gateway
+openclaw gateway restart
+
+# 验证配置
+openclaw config get channels.telegram.groups
+```
+
+**配置说明**：
+
+每个群组的配置选项：
+
+```json
+{
+  "channels": {
+    "telegram": {
+      "groups": {
+        "-5002529238": {
+          "groupPolicy": "open",           // 该群组的策略（可覆盖全局设置）
+          "requireMention": false,         // 是否需要 @bot 才能触发
+          "enabled": true,                 // 是否启用该群组（默认 true）
+          "groupMentionTrigger": "@ai"     // 自定义提及触发字符串（可选）
+        }
+      }
+    }
+  }
+}
+```
+
+**参数说明**：
+
+- `groupPolicy`: 该群组的访问策略
+  - `"open"` - 开放，所有成员都可以与 bot 交互
+  - `"allowlist"` - 白名单模式（需要配合 `allowFrom`）
+  - `"deny"` - 禁用该群组
+
+- `requireMention`: 是否需要 @bot 才能触发
+  - `false` - 任何消息都会被处理（适合专用 bot 群组）
+  - `true` - 只有 @bot 的消息才会被处理（适合有其他对话的群组）
+
+- `enabled`: 是否启用该群组
+  - `true` - 启用
+  - `false` - 禁用（bot 不会处理该群组的任何消息）
+
+**验证修复**：
+
+```bash
+# 1. 检查 groups 配置
+openclaw config get channels.telegram.groups
+# 应该看到所有群组的配置
+
+# 2. 检查 Gateway 状态
+openclaw status | grep -A 10 "Sessions"
+# 应该看到 group 类型的会话
+
+# 3. 查看日志
+tail -f ~/.openclaw/logs/gateway.log
+
+# 4. 在 Telegram 群组中测试
+# 发送消息（不需要 @bot，如果 requireMention: false）
+# 你好
+
+# 或发送（如果 requireMention: true）
+# @your_bot_name 你好
+```
+
+**配置完整示例**：
+
+```json
+{
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "dmPolicy": "pairing",
+      "botToken": "YOUR_BOT_TOKEN",
+      "groupPolicy": "allowlist",
+      "groupAllowFrom": [
+        "-5002529238",
+        "-5092528016",
+        "-5082337987",
+        "-5146706488"
+      ],
+      "groups": {
+        "-5002529238": {
+          "groupPolicy": "open",
+          "requireMention": false
+        },
+        "-5092528016": {
+          "groupPolicy": "open",
+          "requireMention": true,
+          "groupMentionTrigger": "@ai"
+        },
+        "-5082337987": {
+          "groupPolicy": "open",
+          "requireMention": false
+        },
+        "-5146706488": {
+          "groupPolicy": "open",
+          "requireMention": false
+        }
+      }
+    }
+  }
+}
+```
+
+**常见配置场景**：
+
+#### 场景 1：专用 AI 群组（推荐）
+
+```bash
+# 不需要 @bot，任何消息都由 AI 处理
+openclaw config set channels.telegram.groups.'-5002529238'.requireMention false
+openclaw config set channels.telegram.groups.'-5002529238'.groupPolicy open
+```
+
+**适用**：专门为 AI bot 创建的群组，所有消息都是给 bot 的。
+
+#### 场景 2：混合群组（需要 @bot）
+
+```bash
+# 只有 @bot 才触发，其他正常聊天不受影响
+openclaw config set channels.telegram.groups.'-5092528016'.requireMention true
+openclaw config set channels.telegram.groups.'-5092528016'.groupPolicy open
+```
+
+**适用**：普通聊天群组，偶尔需要 AI 协助。
+
+#### 场景 3：禁用特定群组
+
+```bash
+# 临时禁用某个群组
+openclaw config set channels.telegram.groups.'-5082337987'.enabled false
+```
+
+**适用**：不想让 bot 处理某个群组的消息。
+
+**⚠️ 重要提示**：
+
+1. **必须配置 `groups` 对象**：即使设置了全局白名单，也必须为每个群组配置 `groups` 对象！
+
+2. **群组 ID 格式**：Telegram 群组 ID 通常是负数，如 `-5002529238` 或 `-1001234567890`
+
+3. **配置优先级**：群组级别的配置（`groups.<群组ID>`）优先于全局配置（`groupPolicy`）
+
+4. **安全性**：如果启用了 elevated tools，建议：
+   - 使用 `requireMention: true`
+   - 设置自定义的 `groupMentionTrigger`
+   - 只在受信任的群组中使用
+
+**排查清单**：
+
+- [ ] 检查 `channels.telegram.groupPolicy` 是否为 `allowlist`
+- [ ] 检查 `channels.telegram.groupAllowFrom` 是否包含目标群组 ID
+- [ ] **检查 `channels.telegram.groups` 是否配置**（最容易被忽略！）
+- [ ] 为每个群组 ID 配置 `groupPolicy` 和 `requireMention`
+- [ ] 重启 Gateway：`openclaw gateway restart`
+- [ ] 在群组中测试功能
+
+---
+
 **诊断**：
 
 ```bash

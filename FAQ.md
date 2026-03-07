@@ -260,6 +260,97 @@ openclaw gateway restart
 
 **详细排查**：[故障排查指南 - Telegram 群组问题](./stages/stage8-topics/31-troubleshooting.md#telegram-群组无响应)
 
+### Q: Telegram 群组配置了白名单，但还是不回复怎么办？
+
+**A**: 这是一个**更隐蔽的配置问题**！
+
+**症状**：
+- ✅ Telegram 私聊工作正常
+- ✅ 已配置 `groupPolicy: "allowlist"`
+- ✅ 已配置 `groupAllowFrom: [...]`（包含正确的群组ID）
+- ❌ 群组中 @bot 仍然无任何反应
+
+**原因**：
+
+虽然配置了全局的 `groupPolicy` 和 `groupAllowFrom`，但**缺少了 `channels.telegram.groups` 对象的配置**！
+
+OpenClaw 需要为每个群组 ID 单独配置行为参数，包括：
+- `requireMention` - 是否需要 @bot 才能触发
+- `groupPolicy` - 该群组的策略
+- `enabled` - 是否启用该群组
+
+**快速解决**：
+
+```bash
+# 1. 检查 groups 配置（关键步骤！）
+openclaw config get channels.telegram.groups
+# 如果显示 "Config path not found" 或 "{}"，说明没有配置！
+
+# 2. 为每个群组添加配置
+# 假设你的群组 ID 是 -5002529238, -5092528016, -5082337987, -5146706488
+
+# 配置群组 1
+openclaw config set channels.telegram.groups.'-5002529238'.groupPolicy open
+openclaw config set channels.telegram.groups.'-5002529238'.requireMention false
+
+# 配置群组 2
+openclaw config set channels.telegram.groups.'-5092528016'.groupPolicy open
+openclaw config set channels.telegram.groups.'-5092528016'.requireMention false
+
+# 配置群组 3
+openclaw config set channels.telegram.groups.'-5082337987'.groupPolicy open
+openclaw config set channels.telegram.groups.'-5082337987'.requireMention false
+
+# 配置群组 4
+openclaw config set channels.telegram.groups.'-5146706488'.groupPolicy open
+openclaw config set channels.telegram.groups.'-5146706488'.requireMention false
+
+# 3. 重启 Gateway
+openclaw gateway restart
+
+# 4. 验证配置
+openclaw config get channels.telegram.groups
+```
+
+**配置说明**：
+
+- `groupPolicy: "open"` - 该群组开放访问
+- `requireMention: false` - 不需要 @bot，任何消息都会被处理（适合专用 AI 群组）
+- `requireMention: true` - 需要 @bot 才能触发（适合混合聊天群组）
+
+**完整配置示例**：
+
+```json
+{
+  "channels": {
+    "telegram": {
+      "groupPolicy": "allowlist",
+      "groupAllowFrom": ["-5002529238", "-5092528016", "-5082337987", "-5146706488"],
+      "groups": {
+        "-5002529238": {
+          "groupPolicy": "open",
+          "requireMention": false
+        },
+        "-5092528016": {
+          "groupPolicy": "open",
+          "requireMention": false
+        },
+        "-5082337987": {
+          "groupPolicy": "open",
+          "requireMention": false
+        },
+        "-5146706488": {
+          "groupPolicy": "open",
+          "requireMention": false
+        }
+      }
+    }
+  }
+}
+```
+
+**详细排查**：[故障排查指南 - Telegram 群组配置了白名单但仍无响应](./stages/stage8-topics/31-troubleshooting.md#telegram-群组配置了白名单但仍无响应)
+
 ### Q: 支持哪些AI模型？
 
 **A**:
