@@ -392,6 +392,179 @@ openclaw channels status feishu
 
 ---
 
+### 🔴 Telegram 群组无响应
+
+**症状**：
+- ✅ Telegram 私聊工作正常
+- ❌ Telegram 群组中 @bot 无任何反应
+- ❌ 群组消息被完全忽略
+
+**原因分析**：
+
+这是**第三常见的配置问题**！
+
+Telegram 有两种独立的访问控制策略：
+1. **私聊策略（dmPolicy）**：控制私聊访问
+2. **群组策略（groupPolicy）**：控制群组访问
+
+当群组策略设置为 `allowlist`（白名单模式）但白名单列表为空时，所有群组消息会被**静默丢弃**。
+
+**诊断步骤**：
+
+```bash
+# 1. 检查群组策略
+openclaw config get channels.telegram.groupPolicy
+# 如果显示 "allowlist"，说明是白名单模式
+
+# 2. 检查白名单列表
+openclaw config get channels.telegram.groupAllowFrom
+# 如果显示 "Config path not found"，说明白名单为空
+
+# 3. 查看安全审计
+openclaw status | grep -A 5 "telegram"
+# 应该能看到警告：groupAllowFrom is empty
+```
+
+**解决方案**：
+
+#### 方案一：开放所有群组（简单但不推荐）
+
+```bash
+# 修改群组策略为 open
+openclaw config set channels.telegram.groupPolicy open
+
+# 重启 Gateway
+openclaw gateway restart
+
+# 验证配置
+openclaw config get channels.telegram.groupPolicy
+# 应该显示: open
+```
+
+**优点**：
+- ✅ 配置简单，一条命令搞定
+- ✅ 任何群组都可以使用
+
+**缺点**：
+- ⚠️ 安全风险较高
+- ⚠️ 任何群组都可以访问 bot
+- ⚠️ 如果启用了 elevated tools，极度危险
+
+#### 方案二：使用白名单（推荐，更安全）
+
+```bash
+# 步骤 1：获取群组 ID
+# 方法 A：从日志中查找
+grep "telegram" ~/.openclaw/logs/gateway.log | grep "group" | tail -10
+
+# 方法 B：使用 Telegram API
+# 访问：https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getUpdates
+
+# 步骤 2：添加群组到白名单（假设群组 ID 是 -1001234567890）
+openclaw config set channels.telegram.groupAllowFrom '["-1001234567890"]'
+
+# 添加多个群组
+openclaw config set channels.telegram.groupAllowFrom '["-1001234567890", "-1009876543210"]'
+
+# 步骤 3：（可选）设置提及触发
+openclaw config set channels.telegram.groupMentionTrigger "@ai"
+
+# 步骤 4：重启 Gateway
+openclaw gateway restart
+
+# 验证配置
+openclaw config get channels.telegram.groupAllowFrom
+```
+
+**优点**：
+- ✅ 安全可控
+- ✅ 只允许指定的群组访问
+- ✅ 适合与 elevated tools 一起使用
+
+**缺点**：
+- 需要先获取群组 ID
+- 需要手动添加每个群组
+
+**验证修复**：
+
+```bash
+# 1. 检查配置
+openclaw config get channels.telegram.groupPolicy
+
+# 2. 检查白名单
+openclaw config get channels.telegram.groupAllowFrom
+
+# 3. 查看日志
+tail -f ~/.openclaw/logs/gateway.log
+
+# 4. 在 Telegram 群组中测试
+# @your_bot_name 你好
+```
+
+**⚠️ 安全警告**：
+
+如果启用了 elevated tools，请务必：
+
+1. ✅ **使用白名单模式**
+2. ✅ **只添加受信任的群组**
+3. ✅ **设置提及触发**（groupMentionTrigger）
+4. ✅ **定期审查白名单**
+5. ❌ **避免在公开群组中使用**
+
+**不同配置的安全级别对比**：
+
+| 私聊 | 群组 | Elevated | 安全级别 | 适用场景 |
+|------|------|----------|----------|----------|
+| pairing | allowlist（空） | ❌ | ⭐⭐⭐⭐⭐ | 仅私聊 |
+| pairing | open | ❌ | ⭐⭐⭐ | 私聊+公开群组 |
+| pairing | allowlist | ✅ | ⭐⭐⭐⭐ | 私聊+指定群组 |
+| pairing | open | ✅ | ⭐ | ❌ 极度危险 |
+
+**最佳实践**：
+
+1. ✅ **默认使用白名单**：从 allowlist 开始
+2. ✅ **按需添加群组**：只添加受信任的群组
+3. ✅ **设置提及触发**：避免无意中触发
+4. ✅ **定期安全审计**：每周检查白名单
+5. ✅ **监控日志**：关注异常的群组活动
+
+---
+
+**诊断**：
+
+```bash
+# 检查所有通道状态
+openclaw status --deep
+
+# 检查特定通道
+openclaw channels status telegram
+openclaw channels status feishu
+```
+
+**常见原因**：
+
+1. **认证信息错误**
+   ```bash
+   # 检查认证配置
+   openclaw config get channels.telegram.botToken
+   openclaw config get channels.feishu.appId
+   ```
+
+2. **网络问题**
+   ```bash
+   # 测试网络连接
+   curl https://api.telegram.org
+   ping open.feishu.cn
+   ```
+
+3. **Webhook 配置错误**
+   ```bash
+   # 检查 webhook 配置
+   openclaw config get channels.telegram.webhook
+   ```
+
+---
+
 ## 模型配置问题
 
 ### API 密钥问题

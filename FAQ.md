@@ -227,6 +227,39 @@ openclaw status | grep runtime
 
 详细配置指南：[最佳实践文档](./stages/stage8-topics/32-best-practices.md)
 
+### Q: Telegram 私聊能用，但群里 @bot 没反应怎么办？
+
+**A**: 这是**第三常见的配置问题**！
+
+**症状**：
+- ✅ Telegram 私聊工作正常
+- ❌ 群组中 @bot 无任何反应
+- ❌ 群组消息被完全忽略
+
+**原因**：
+
+Telegram 有两种独立的访问控制：
+1. **私聊策略**（dmPolicy）：控制私聊
+2. **群组策略**（groupPolicy）：控制群组
+
+当群组策略是 `allowlist`（白名单模式）但白名单为空时，所有群组消息会被**静默丢弃**。
+
+**快速解决**：
+
+```bash
+# 方案 1：开放所有群组（简单）
+openclaw config set channels.telegram.groupPolicy open
+openclaw gateway restart
+
+# 方案 2：使用白名单（推荐）
+# 1. 先获取群组 ID
+# 2. 添加到白名单
+openclaw config set channels.telegram.groupAllowFrom '["群组ID"]'
+openclaw gateway restart
+```
+
+**详细排查**：[故障排查指南 - Telegram 群组问题](./stages/stage8-topics/31-troubleshooting.md#telegram-群组无响应)
+
 ### Q: 支持哪些AI模型？
 
 **A**:
